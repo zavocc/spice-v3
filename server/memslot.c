@@ -224,11 +224,11 @@ void memslot_info_reset(RedMemSlotInfo *info)
         }
 }
 
-static inline int memslot_get_id(RedMemSlotInfo *info, uint64_t addr)
+/** static inline int memslot_get_id(RedMemSlotInfo *info, uint64_t addr)
 {
     int slot_id = addr >> info->memslot_id_shift;
     if (slot_id >= info->num_memslots) {
         return -1;
     }
     return slot_id;
-}
+} **/

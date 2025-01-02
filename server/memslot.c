@@ -137,6 +137,31 @@ void memslot_info_init(RedMemSlotInfo *info,
                        uint8_t id_bits,
                        uint8_t internal_groupslot_id)
 {
+    // Allow overriding via env vars
+    const char *env_num_slots = getenv("SPICE_MEMSLOT_NUM_SLOTS");
+    const char *env_num_groups = getenv("SPICE_MEMSLOT_NUM_GROUPS"); 
+    const char *env_gen_bits = getenv("SPICE_MEMSLOT_GEN_BITS");
+    const char *env_id_bits = getenv("SPICE_MEMSLOT_ID_BITS");
+
+    if (env_num_slots) {
+        num_slots = atoi(env_num_slots);
+    }
+    if (env_num_groups) {
+        num_groups = atoi(env_num_groups);
+    }
+    if (env_gen_bits) {
+        generation_bits = atoi(env_gen_bits);
+    }
+    if (env_id_bits) {
+        id_bits = atoi(env_id_bits);
+    }
+
+    // Add validation
+    spice_assert(num_slots > 0);
+    spice_assert(num_groups > 0);
+    spice_assert(generation_bits > 0);
+    spice_assert(id_bits > 0);
+
     uint32_t i;
 
     spice_assert(num_slots > 0);

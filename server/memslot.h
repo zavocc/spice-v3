@@ -25,6 +25,11 @@
 
 SPICE_BEGIN_DECLS
 
+#define SPICE_MEMSLOT_SAFE_BITS 7        // 7 bits = max 128 slots
+#define SPICE_MEMSLOT_MAX_SLOTS (1 << SPICE_MEMSLOT_SAFE_BITS)
+#define SPICE_MEMSLOT_MAX_GROUPS 8
+#define SPICE_MEMSLOT_DEFAULT_SLOTS 32
+
 typedef struct MemSlot {
     int generation;
     uintptr_t virt_start_addr;
@@ -53,6 +58,10 @@ static inline int memslot_get_id(RedMemSlotInfo *info, uint64_t addr)
 static inline int memslot_get_generation(RedMemSlotInfo *info, uint64_t addr)
 {
     return (addr >> info->memslot_gen_shift) & info->memslot_gen_mask;
+}
+
+static inline bool memslot_id_is_valid(RedMemSlotInfo *info, int slot_id) {
+    return slot_id >= 0 && slot_id < info->num_memslots;
 }
 
 int memslot_validate_virt(RedMemSlotInfo *info, uintptr_t virt, int slot_id,

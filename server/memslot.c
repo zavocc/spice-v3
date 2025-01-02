@@ -18,6 +18,7 @@
 #include <config.h>
 
 #include <inttypes.h>
+#include <stdlib.h>
 
 #include "memslot.h"
 
@@ -131,41 +132,37 @@ void *memslot_get_virt(RedMemSlotInfo *info, QXLPHYSICAL addr, uint32_t add_size
     return (void *)h_virt;
 }
 
+static bool validate_slot_params(uint32_t *num_slots, uint32_t *num_groups, 
+                               uint8_t *id_bits) {
+    const char *env_slots = getenv("SPICE_MEMSLOT_NUM_SLOTS");
+    if (env_slots) {
+        *num_slots = atoi(env_slots);
+        if (*num_slots > SPICE_MEMSLOT_MAX_SLOTS) {
+            spice_warning("Requested slots %d exceeds maximum %d, limiting",
+                         *num_slots, SPICE_MEMSLOT_MAX_SLOTS);
+            *num_slots = SPICE_MEMSLOT_MAX_SLOTS;
+        }
+        // Ensure id_bits matches max slots
+        *id_bits = SPICE_MEMSLOT_SAFE_BITS;
+    }
+    
+    const char *env_groups = getenv("SPICE_MEMSLOT_NUM_GROUPS");
+    if (env_groups) {
+        *num_groups = atoi(env_groups);
+        if (*num_groups > SPICE_MEMSLOT_MAX_GROUPS) {
+            *num_groups = SPICE_MEMSLOT_MAX_GROUPS;
+        }
+    }
+    return true;
+}
+
 void memslot_info_init(RedMemSlotInfo *info,
                        uint32_t num_groups, uint32_t num_slots,
                        uint8_t generation_bits,
                        uint8_t id_bits,
                        uint8_t internal_groupslot_id)
 {
-    // Allow overriding via env vars
-    const char *env_num_slots = getenv("SPICE_MEMSLOT_NUM_SLOTS");
-    const char *env_num_groups = getenv("SPICE_MEMSLOT_NUM_GROUPS"); 
-    const char *env_gen_bits = getenv("SPICE_MEMSLOT_GEN_BITS");
-    const char *env_id_bits = getenv("SPICE_MEMSLOT_ID_BITS");
-
-    if (env_num_slots) {
-        num_slots = atoi(env_num_slots);
-    }
-    if (env_num_groups) {
-        num_groups = atoi(env_num_groups);
-    }
-    if (env_gen_bits) {
-        generation_bits = atoi(env_gen_bits);
-    }
-    if (env_id_bits) {
-        id_bits = atoi(env_id_bits);
-    }
-
-    // Add validation
-    spice_assert(num_slots > 0);
-    spice_assert(num_groups > 0);
-    spice_assert(generation_bits > 0);
-    spice_assert(id_bits > 0);
-
-    uint32_t i;
-
-    spice_assert(num_slots > 0);
-    spice_assert(num_groups > 0);
+    validate_slot_params(&num_slots, &num_groups, &id_bits);
 
     info->num_memslots_groups = num_groups;
     info->num_memslots = num_slots;
@@ -175,16 +172,16 @@ void memslot_info_init(RedMemSlotInfo *info,
 
     info->mem_slots = g_new(MemSlot *, num_groups);
 
-    for (i = 0; i < num_groups; ++i) {
+    for (uint32_t i = 0; i < num_groups; ++i) {
         info->mem_slots[i] = g_new0(MemSlot, num_slots);
     }
 
-    /* TODO: use QXLPHYSICAL_BITS */
+    // Adjust shift values for safe addressing
     info->memslot_id_shift = 64 - info->mem_slot_bits;
-    info->memslot_gen_shift = 64 - (info->mem_slot_bits + info->generation_bits);
+    info->memslot_gen_shift = info->memslot_id_shift - info->generation_bits;
     info->memslot_gen_mask = ~((QXLPHYSICAL)-1 << info->generation_bits);
-    info->memslot_clean_virt_mask = (((QXLPHYSICAL)(-1)) >>
-                                       (info->mem_slot_bits + info->generation_bits));
+    info->memslot_clean_virt_mask = (((QXLPHYSICAL)(-1)) >> 
+                                    (info->mem_slot_bits + info->generation_bits));
 }
 
 void memslot_info_destroy(RedMemSlotInfo *info)
@@ -225,4 +222,13 @@ void memslot_info_reset(RedMemSlotInfo *info)
         for (i = 0; i < info->num_memslots_groups; ++i) {
             memset(info->mem_slots[i], 0, sizeof(MemSlot) * info->num_memslots);
         }
+}
+
+static inline int memslot_get_id(RedMemSlotInfo *info, uint64_t addr)
+{
+    int slot_id = addr >> info->memslot_id_shift;
+    if (slot_id >= info->num_memslots) {
+        return -1;
+    }
+    return slot_id;
 }
